@@ -1,0 +1,12 @@
+build/*
+!build/.gitkeep
+data/*.txt
+data/*.bak
+data/*.tmp
+exports/*
+!exports/.gitkeep
+*.pdb
+*.o
+*.exe
+*.tmp
+*.bak
