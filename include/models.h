@@ -33,8 +33,8 @@ typedef struct {
 
 /* Nút danh sách liên kết đơn: dữ liệu và con trỏ tới nút tiếp theo. */
 typedef struct EmployeeNode {
-    Employee employee;
-    struct EmployeeNode *next;
+    Employee employee;          // Dữ liệu của 1 nhân viên
+    struct EmployeeNode *next;  // Con trỏ trỏ tới nút (nhân viên) kế tiếp
 } EmployeeNode;
 
 typedef struct {
@@ -46,35 +46,35 @@ typedef struct {
     char note[201];
 } Attendance;
 
-/* Bản sao thông số theo tháng; đổi hồ sơ không tự đổi dữ liệu này. */
+/* Dữ liệu đầu vào tính lương theo tháng (lương, phụ cấp, thưởng, phạt riêng của từng tháng) */
 typedef struct {
     char employeeId[16];
     int month;
     int year;
     long long baseSalary;
-    long long allowance;
-    long long bonus;
-    long long deduction;
+    long long allowance;// trợ cấp
+    long long bonus;// thưởng
+    long long deduction;// tiền phạt
 } PayrollInput;
 
-/* Kết quả đã chốt giữ cả tên và phòng ban tại thời điểm chốt. */
+/* Phiếu lương / Kết quả cuối cùng */
 typedef struct {
     char employeeId[16];
-    char employeeName[101];
-    char department[61];
+    char employeeName[101]; // Lưu cứng tên tại thời điểm chốt
+    char department[61];    // Lưu cứng phòng ban tại thời điểm chốt
     int month;
     int year;
-    int standardDays;
-    int paidHalfHours;
-    int overtimeHalfHours;
+    int standardDays;       // Số công chuẩn của tháng (ví dụ 26 ngày)
+    int paidHalfHours;      // Tổng nửa giờ được hưởng lương (đi làm + phép có lương)
+    int overtimeHalfHours;  // Tổng nửa giờ tăng ca
     long long baseSalary;
     long long allowance;
     long long bonus;
     long long deduction;
-    long long regularPay;
-    long long allowancePay;
-    long long overtimePay;
-    long long netPay;
+    long long regularPay;   // Tiền lương ngày công thường
+    long long allowancePay; // Tiền phụ cấp thực nhận theo công
+    long long overtimePay;  // Tiền tăng ca (nhân hệ số 150%)
+    long long netPay;       // THỰC LĨNH (tổng cộng các khoản - khấu trừ)
 } Payroll;
 
 typedef struct {
@@ -83,14 +83,14 @@ typedef struct {
 } MonthLock;
 
 typedef enum {
-    RESULT_OK,
-    RESULT_INVALID,
-    RESULT_NOT_FOUND,
-    RESULT_DUPLICATE,
-    RESULT_FULL,
-    RESULT_LOCKED,
-    RESULT_IO_ERROR,
-    RESULT_NO_MEMORY
+    RESULT_OK,        // Thành công
+    RESULT_INVALID,   // Dữ liệu nhập sai quy tắc (ví dụ: ngày 30/02, lương âm)
+    RESULT_NOT_FOUND, // Không tìm thấy mã nhân viên / bản ghi
+    RESULT_DUPLICATE, // Trùng lặp (ví dụ: trùng mã NV hoặc đã chấm công ngày này rồi)
+    RESULT_FULL,      // Đầy bộ nhớ cho phép (vượt quá 200 NV hoặc 150.000 dòng công)
+    RESULT_LOCKED,    // Tháng này đã bị khóa (chốt lương rồi), cấm sửa!
+    RESULT_IO_ERROR,  // Lỗi đọc/ghi file trên ổ cứng
+    RESULT_NO_MEMORY  // Hết RAM khi gọi malloc/realloc
 } Result;
 
 /*
@@ -98,23 +98,34 @@ typedef enum {
  * Nhân viên dùng danh sách liên kết; công và lương dùng mảng động để tổng hợp.
  */
 typedef struct {
-    EmployeeNode *employeeHead;
-    size_t employeeCount;
-    Attendance *attendance;
-    size_t attendanceCount;
-    size_t attendanceCap;
-    PayrollInput *inputs;
-    size_t inputCount;
-    size_t inputCap;
-    Payroll *payrolls;
-    size_t payrollCount;
-    size_t payrollCap;
-    MonthLock *locks;
-    size_t lockCount;
-    size_t lockCap;
-    int dirty; /* 1: còn thay đổi trong bộ nhớ chưa ghi tệp. */
-    char dataDir[PATH_CAP];
-    char error[512];
+    /* Danh sách liên kết đơn nhân viên */
+    EmployeeNode *employeeHead; /* Con trỏ tới nhân viên đầu danh sách */
+    size_t employeeCount;       /* Tổng số nhân viên */
+
+    /* Mảng động dữ liệu chấm công */
+    Attendance *attendance;     /* Con trỏ mảng chấm công */
+    size_t attendanceCount;     /* Số bản ghi công hiện có */
+    size_t attendanceCap;       /* Sức chứa tối đa của mảng công */
+
+    /* Mảng động đầu vào tính lương theo tháng (mức lương, thưởng, phạt riêng từng tháng) */
+    PayrollInput *inputs;       /* Con trỏ mảng đầu vào tính lương tháng */
+    size_t inputCount;          /* Số bản ghi đầu vào lương hiện có */
+    size_t inputCap;            /* Sức chứa tối đa của mảng đầu vào lương */
+
+    /* Mảng động bảng lương kết quả */
+    Payroll *payrolls;          /* Con trỏ mảng bảng lương */
+    size_t payrollCount;        /* Số bản ghi lương hiện có */
+    size_t payrollCap;          /* Sức chứa tối đa của mảng lương */
+
+    /* Mảng động lưu các tháng đã chốt kỳ */
+    MonthLock *locks;           /* Con trỏ mảng kỳ đã chốt */
+    size_t lockCount;           /* Số kỳ đã chốt */
+    size_t lockCap;             /* Sức chứa tối đa của mảng kỳ chốt */
+
+    /* Trạng thái chung */
+    int dirty;                  /* 1: có thay đổi chưa lưu ra tệp; 0: đã lưu */
+    char dataDir[PATH_CAP];     /* Đường dẫn thư mục dữ liệu (vd: "demo-run") */
+    char error[512];            /* Chuỗi lưu thông báo lỗi gần nhất */
 } AppData;
 
 void appInit(AppData *app, const char *dataDirectory);
