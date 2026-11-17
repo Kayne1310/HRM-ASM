@@ -228,3 +228,59 @@ Result deleteEmployee(AppData *app, const char *employeeId) {
     app->dirty = 1;
     return RESULT_OK;
 }
+
+/* Tách danh sách bằng hai con trỏ: slow đi 1 bước, fast đi 2 bước. */
+static EmployeeNode *splitEmployeeList(EmployeeNode *head) {
+    EmployeeNode *slow = head;
+    EmployeeNode *fast = head->next;
+    while (fast != NULL && fast->next != NULL) {
+        slow = slow->next;
+        fast = fast->next->next;
+    }
+    EmployeeNode *rightHalf = slow->next;
+    slow->next = NULL;
+    return rightHalf;
+}
+
+/* Trộn bằng vòng lặp để chỉ phần chia đôi sử dụng đệ quy. */
+static EmployeeNode *mergeEmployeeLists(EmployeeNode *left, EmployeeNode *right) {
+    EmployeeNode temporaryHead = {0};
+    EmployeeNode *tail = &temporaryHead;
+
+    while (left != NULL && right != NULL) {
+        if (strcmp(left->employee.id, right->employee.id) <= 0) {
+            tail->next = left;
+            left = left->next;
+        } else {
+            tail->next = right;
+            right = right->next;
+        }
+        tail = tail->next;
+    }
+    tail->next = left != NULL ? left : right;
+    return temporaryHead.next;
+}
+
+/*
+ * Đệ quy có ý nghĩa thực tế: Merge Sort sắp xếp danh sách nhân viên.
+ * Điểm dừng: danh sách rỗng hoặc chỉ có một nút.
+ * Mỗi lần gọi chia đôi số nút, độ sâu O(log n), thời gian O(n log n).
+ * Chỉ nối lại các nút, không cấp phát, sao chép hay làm mất hồ sơ.
+ */
+static EmployeeNode *mergeSortEmployees(EmployeeNode *head) {
+    if (head == NULL || head->next == NULL) {
+        return head;
+    }
+    EmployeeNode *rightHalf = splitEmployeeList(head);
+    EmployeeNode *sortedLeft = mergeSortEmployees(head);
+    EmployeeNode *sortedRight = mergeSortEmployees(rightHalf);
+    return mergeEmployeeLists(sortedLeft, sortedRight);
+}
+
+void sortEmployeesById(AppData *app) {
+    if (app->employeeCount < 2) {
+        return;
+    }
+    app->employeeHead = mergeSortEmployees(app->employeeHead);
+    app->dirty = 1; /* Lưu lại thứ tự mới khi người dùng chọn lưu. */
+}

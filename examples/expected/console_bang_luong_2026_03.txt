@@ -1,0 +1,7 @@
+Kỳ 03/2026
+BẢNG LƯƠNG TẠM - tính từ nguồn hiện tại
+MÃ | HỌ TÊN | CÔNG HƯỞNG | GIỜ TĂNG CA | THỰC LĨNH ĐỒNG
+NV001 | Nguyễn Văn An | 24.00 | 10.0 | 14437500
+NV002 | Trần Thị Bình | 6.00 | 0.0 | 660000
+NV003 | Lê Minh Cường | 26.00 | 0.0 | 11440000
+Tổng 3 người, tổng thực lĩnh toàn kỳ: 26537500 đồng
