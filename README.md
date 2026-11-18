@@ -51,7 +51,8 @@ Nhân viên được lưu bằng **danh sách liên kết đơn** với đủ th
 
 - Thêm, sửa, xem chi tiết, lọc, tìm và ghi nhận nghỉ việc của nhân viên.
 - Chỉ xóa hồ sơ chưa có công, thông số lương hoặc bảng lương liên quan.
-- Chấm công một người hoặc lần lượt theo ngày; sửa, xóa, xem theo ngày hoặc nhân viên/tháng.
+- Chấm công nhanh theo tháng cho một nhân viên, tự tạo ngày làm thứ Hai đến thứ Bảy và nhập riêng ngày nghỉ; vẫn có thể chấm công từng ngày.
+- Sửa, xóa, xem theo ngày hoặc theo nhân viên/tháng.
 - Phát hiện công còn thiếu; không tự biến ngày thiếu thành nghỉ không lương.
 - Lưu thông số lương riêng từng tháng; nhập thưởng, khấu trừ; lấy lại mức từ hồ sơ có xác nhận.
 - Tính lại bảng tạm mỗi lần xem; phiếu lương chi tiết; sắp xếp tăng/giảm thực lĩnh.
@@ -121,7 +122,16 @@ Biên dịch thủ công với GCC từ thư mục dự án:
 gcc -std=c11 -Wall -Wextra -Wpedantic -Werror -Iinclude src/models.c src/date_utils.c src/input.c src/employee.c src/attendance.c src/payroll.c src/storage.c src/ui.c src/ui_display.c src/ui_employee.c src/ui_attendance.c src/ui_payroll.c src/search_statistics.c src/main.c -o build/chamcong.exe
 ```
 
-Trên Linux thay tên đầu ra bằng `build/chamcong`. Có `CMakeLists.txt` cho nhóm muốn dùng CMake; đường dựng CMake chưa được chạy trong môi trường nghiệm thu này.
+Trên Visual Studio 2026, mở thư mục gốc dự án bằng **File → Open → Folder**, chọn cấu hình `x64-Debug` và target khởi chạy `chamcong`, rồi nhấn **F5**. Project CMake đặt UTF-8 cho cả thư viện nghiệp vụ và menu tiếng Việt.
+
+Cũng có thể dựng Release bằng CMake trong Developer PowerShell:
+
+```text
+cmake -S . -B build/vs2026-release -G "Visual Studio 18 2026"
+cmake --build build/vs2026-release --config Release --target chamcong
+```
+
+Trên Linux thay tên đầu ra GCC bằng `build/chamcong`.
 
 ## Kiểm thử
 

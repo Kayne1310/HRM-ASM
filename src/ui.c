@@ -27,11 +27,20 @@ void runConsole(AppData *app) {
          "Giả định học tập: thứ Hai đến thứ Bảy, 8 giờ/ngày, tăng ca 150%, "
          "chưa tính thuế bảo hiểm.");
     while (!inputEnded()) {
-        printf("\nĐã nạp: %zu nhân viên, %zu công, %zu kỳ đã chốt. %s\n", app->employeeCount,
-               app->attendanceCount, app->lockCount,
-               app->dirty ? "CÓ THAY ĐỔI CHƯA LƯU" : "Đã lưu");
-        int menuChoice = askMenuChoice("1 Nhân viên | 2 Chấm công | 3 Bảng lương\n"
-                                       "4 Tìm kiếm | 5 Thống kê | 6 Lưu dữ liệu | 0 Thoát",
+        printf("\n------------------------------------------------------------\n"
+               "QUẢN LÝ CHẤM CÔNG VÀ TÍNH LƯƠNG\n"
+               "Nhân viên: %zu   |   Bản ghi công: %zu   |   Kỳ đã chốt: %zu\n"
+               "Trạng thái dữ liệu: %s\n"
+               "------------------------------------------------------------\n",
+               app->employeeCount, app->attendanceCount, app->lockCount,
+               app->dirty ? "Chưa lưu" : "Đã lưu");
+        int menuChoice = askMenuChoice(" 1. Nhân viên\n"
+                                       " 2. Chấm công\n"
+                                       " 3. Bảng lương\n"
+                                       " 4. Tìm kiếm\n"
+                                       " 5. Thống kê\n"
+                                       " 6. Lưu dữ liệu\n"
+                                       " 0. Thoát",
                                        6);
         if (inputEnded()) {
             break;

@@ -2,6 +2,7 @@
 #include "employee.h"
 #include "date_utils.h"
 #include <string.h>
+#include <time.h>
 
 int findAttendanceIndex(const AppData *app, const char *employeeId, Date date) {
     for (size_t index = 0; index < app->attendanceCount; index++) {
@@ -81,6 +82,107 @@ Result deleteAttendance(AppData *app, const char *employeeId, Date date) {
             (app->attendanceCount - (size_t)recordIndex - 1) * sizeof(Attendance));
     app->attendanceCount--;
     app->dirty = 1;
+    return RESULT_OK;
+}
+
+Result generateMonthlyAttendance(AppData *app, const char *employeeId, int month, int year,
+                                 const int leaveDays[31], size_t leaveDayCount,
+                                 AttendanceType leaveType, size_t *createdCount) {
+    Attendance generated[31];
+    size_t generatedCount = 0;
+    int employeeIndex = findEmployeeIndex(app, employeeId);
+    if (createdCount) {
+        *createdCount = 0;
+    }
+    if (!validMonth(month, year) || employeeIndex < 0) {
+        return appError(app, RESULT_INVALID, "Nhân viên hoặc kỳ chấm công không hợp lệ.");
+    }
+    if (isLocked(app, month, year)) {
+        return appError(app, RESULT_LOCKED, "Tháng đã chốt.");
+    }
+    if (leaveDayCount > 31 || (leaveDayCount && !leaveDays) ||
+        (leaveType != ATT_PAID_LEAVE && leaveType != ATT_UNPAID_LEAVE)) {
+        return appError(app, RESULT_INVALID, "Danh sách ngày nghỉ không hợp lệ.");
+    }
+
+    time_t now = time(NULL);
+    struct tm *currentTime = localtime(&now);
+    if (!currentTime) {
+        return appError(app, RESULT_INVALID, "Không xác định được ngày hiện tại.");
+    }
+    int lastDay = daysInMonth(month, year);
+    if (year > currentTime->tm_year + 1900 ||
+        (year == currentTime->tm_year + 1900 && month > currentTime->tm_mon + 1)) {
+        return appError(app, RESULT_INVALID, "Không thể tạo công cho tháng trong tương lai.");
+    }
+    if (year == currentTime->tm_year + 1900 && month == currentTime->tm_mon + 1 &&
+        lastDay > currentTime->tm_mday) {
+        lastDay = currentTime->tm_mday;
+    }
+
+    const Employee *employee = employeeAt(app, employeeIndex);
+    for (size_t index = 0; index < leaveDayCount; index++) {
+        int day = leaveDays[index];
+        Date date = {day, month, year};
+        if (day < 1 || day > lastDay || !isWorkingDay(date) || !employeeOnDate(employee, date)) {
+            return appError(app, RESULT_INVALID,
+                            "Ngày nghỉ phải là ngày làm thuộc thời gian làm việc trong kỳ.");
+        }
+        for (size_t otherIndex = 0; otherIndex < index; otherIndex++) {
+            if (leaveDays[otherIndex] == day) {
+                return appError(app, RESULT_DUPLICATE, "Ngày nghỉ bị nhập trùng.");
+            }
+        }
+        if (findAttendanceIndex(app, employeeId, date) >= 0) {
+            return appError(app, RESULT_DUPLICATE,
+                            "Ngày nghỉ đã có bản ghi chấm công; hãy kiểm tra trước khi tạo nhanh.");
+        }
+    }
+
+    for (int day = 1; day <= lastDay; day++) {
+        Date date = {day, month, year};
+        if (!isWorkingDay(date) || !employeeOnDate(employee, date)) {
+            continue;
+        }
+        if (findAttendanceIndex(app, employeeId, date) >= 0) {
+            continue;
+        }
+        int isLeaveDay = 0;
+        for (size_t index = 0; index < leaveDayCount; index++) {
+            if (leaveDays[index] == day) {
+                isLeaveDay = 1;
+                break;
+            }
+        }
+        Attendance *record = &generated[generatedCount++];
+        *record = (Attendance){0};
+        strcpy(record->employeeId, employeeId);
+        record->date = date;
+        record->type = isLeaveDay ? leaveType : ATT_WORK;
+        record->regularHalfHours = isLeaveDay ? 0 : 16;
+        record->overtimeHalfHours = 0;
+        if (isLeaveDay) {
+            strcpy(record->note, "Nghỉ từ chấm công nhanh");
+        }
+    }
+
+    if (!generatedCount) {
+        return appError(app, RESULT_INVALID, "Kỳ này không còn ngày làm nào cần tạo.");
+    }
+    if (app->attendanceCount + generatedCount > MAX_ATTENDANCE) {
+        return appError(app, RESULT_FULL, "Đã đầy danh sách công.");
+    }
+    if (!reserveArray((void **)&app->attendance, &app->attendanceCap,
+                      app->attendanceCount + generatedCount, sizeof(Attendance))) {
+        return appError(app, RESULT_NO_MEMORY, "Không đủ bộ nhớ.");
+    }
+    memcpy(&app->attendance[app->attendanceCount], generated,
+           generatedCount * sizeof(Attendance));
+    app->attendanceCount += generatedCount;
+    app->dirty = 1;
+    if (createdCount) {
+        *createdCount = generatedCount;
+    }
     return RESULT_OK;
 }
 
