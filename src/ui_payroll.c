@@ -5,10 +5,10 @@
 #include "attendance.h"
 #include "payroll.h"
 #include "storage.h"
-#include <stdlib.h>
-#include <string.h>
+#include <stdlib.h> /* Dùng cho qsort sắp xếp mảng bảng lương */
+#include <string.h> /* Dùng cho strcmp, strcpy */
 
-/* Biểu mẫu lương chỉ gọi nghiệp vụ; không tự cài công thức tính. */
+/* Biểu mẫu cập nhật thông số lương tháng (lương CB, phụ cấp, thưởng, khấu trừ); không tự tính lương. */
 static void payrollInputForm(AppData *app) {
     int month, year;
     char employeeId[16];
@@ -16,7 +16,7 @@ static void payrollInputForm(AppData *app) {
     if (!askPeriod(&month, &year) || !askEmployeeId(employeeId)) {
         return;
     }
-    if (isLocked(app, month, year)) {
+    if (isLocked(app, month, year)) { /* Chặn sửa thông số tháng đã chốt */
         puts("Tháng đã chốt, không sửa thông số.");
         return;
     }
@@ -27,9 +27,9 @@ static void payrollInputForm(AppData *app) {
     }
     PayrollInput payrollInput = {0};
     int inputIndex = findInputIndex(app, employeeId, month, year);
-    if (inputIndex >= 0) {
+    if (inputIndex >= 0) { /* Nếu tháng này đã có thông số -> nạp ra để sửa tiếp */
         payrollInput = app->inputs[inputIndex];
-    } else {
+    } else { /* Chưa có -> lấy bản sao mặc định từ hồ sơ nhân viên */
         strcpy(payrollInput.employeeId, employeeId);
         payrollInput.month = month;
         payrollInput.year = year;
@@ -48,10 +48,10 @@ static void payrollInputForm(AppData *app) {
     if (!menuChoice) {
         return;
     }
-    if (menuChoice == 2) {
+    if (menuChoice == 2) { /* Cập nhật lại lương & phụ cấp hiện tại từ hồ sơ (giữ thưởng/khấu trừ) */
         payrollInput.baseSalary = employeeAt(app, employeeIndex)->baseSalary;
         payrollInput.allowance = employeeAt(app, employeeIndex)->allowance;
-    } else {
+    } else { /* Nhập thủ công từng khoản cho riêng tháng này */
         if (!askInteger("Lương cơ bản: ", 1, MAX_MONEY, &money)) {
             return;
         }
@@ -74,10 +74,12 @@ static void payrollInputForm(AppData *app) {
     }
 }
 
+/* Hàm so sánh 2 dòng lương theo mã nhân viên tăng dần (dùng cho qsort) */
 static int comparePayrollById(const void *left, const void *right) {
     return strcmp(((const Payroll *)left)->employeeId, ((const Payroll *)right)->employeeId);
 }
 
+/* Hàm so sánh thực lĩnh tăng dần (nếu bằng nhau thì xếp theo mã nhân viên) */
 static int comparePayrollAscending(const void *left, const void *right) {
     const Payroll *leftPayroll = left;
     const Payroll *rightPayroll = right;
@@ -90,6 +92,7 @@ static int comparePayrollAscending(const void *left, const void *right) {
     return comparePayrollById(left, right);
 }
 
+/* Hàm so sánh thực lĩnh giảm dần (nếu bằng nhau thì xếp theo mã nhân viên) */
 static int comparePayrollDescending(const void *left, const void *right) {
     const Payroll *leftPayroll = left;
     const Payroll *rightPayroll = right;
@@ -102,6 +105,7 @@ static int comparePayrollDescending(const void *left, const void *right) {
     return comparePayrollById(left, right);
 }
 
+/* Biểu mẫu xuất bảng lương tháng ra tệp CSV (có hỏi xác nhận nếu tệp đã tồn tại) */
 static void exportPayrollForm(AppData *app, int month, int year) {
     char filename[PATH_CAP], provided[PATH_CAP];
     snprintf(filename, sizeof filename, "exports/bang_luong_%04d_%02d.csv", year, month);
@@ -109,9 +113,9 @@ static void exportPayrollForm(AppData *app, int month, int year) {
     if (!askText("Tệp xuất (trống = mặc định): ", provided, sizeof provided, 1)) {
         return;
     }
-    if (*provided) {
+    if (*provided) { /* Nếu người dùng nhập đường dẫn riêng */
         strcpy(filename, provided);
-    } else if (!makeDirectory("exports")) {
+    } else if (!makeDirectory("exports")) { /* Nếu dùng mặc định thì đảm bảo thư mục exports tồn tại */
         puts("Không tạo được exports.");
         return;
     }
@@ -122,16 +126,17 @@ static void exportPayrollForm(AppData *app, int month, int year) {
     reportResult(app, exportPayroll(app, month, year, filename, exists));
 }
 
+/* Màn hình xem bảng lương của một kỳ và thực hiện các thao tác (phiếu lương, chốt, xuất CSV, sắp xếp) */
 static void payrollView(AppData *app, int month, int year) {
     while (!inputEnded()) {
         Payroll rows[MAX_EMPLOYEES];
         size_t rowCount;
-        Result result = buildPayroll(app, month, year, rows, &rowCount);
+        Result result = buildPayroll(app, month, year, rows, &rowCount); /* Luôn tính lại từ nguồn mới nhất */
         if (result != RESULT_OK) {
             reportResult(app, result);
             return;
         }
-        qsort(rows, rowCount, sizeof(Payroll), comparePayrollById);
+        qsort(rows, rowCount, sizeof(Payroll), comparePayrollById); /* Mặc định xếp theo mã nhân viên */
         printf("\nKỳ %02d/%d\n", month, year);
         printPayroll(rows, rowCount, isLocked(app, month, year), 1);
         int menuChoice = askMenuChoice("\nTHAO TÁC BẢNG LƯƠNG\n"
@@ -145,7 +150,7 @@ static void payrollView(AppData *app, int month, int year) {
         if (!menuChoice) {
             return;
         }
-        if (menuChoice == 1) {
+        if (menuChoice == 1) { /* Xem phiếu lương chi tiết của 1 nhân viên */
             char employeeId[16];
             int found = 0;
             if (!askEmployeeId(employeeId)) {
@@ -161,17 +166,17 @@ static void payrollView(AppData *app, int month, int year) {
                 puts("Không có phiếu lương của mã này trong kỳ.");
             }
         }
-        if (menuChoice == 2) {
+        if (menuChoice == 2) { /* Chốt kỳ lương (đóng băng dữ liệu bằng Snapshot) */
             if (isLocked(app, month, year)) {
                 puts("Tháng đã chốt.");
             } else if (confirm("Sau chốt không sửa dữ liệu kỳ. Y chốt N hủy: ")) {
                 reportResult(app, finalizePayroll(app, month, year));
             }
         }
-        if (menuChoice == 3) {
+        if (menuChoice == 3) { /* Xuất báo cáo CSV */
             exportPayrollForm(app, month, year);
         }
-        if (menuChoice == 4 || menuChoice == 5) {
+        if (menuChoice == 4 || menuChoice == 5) { /* Sắp xếp bảng lương theo thực lĩnh tăng/giảm */
             qsort(rows, rowCount, sizeof(Payroll),
                   menuChoice == 4 ? comparePayrollAscending : comparePayrollDescending);
             printPayroll(rows, rowCount, isLocked(app, month, year), 1);
@@ -179,6 +184,7 @@ static void payrollView(AppData *app, int month, int year) {
     }
 }
 
+/* Vòng lặp menu chức năng Bảng lương */
 void payrollMenu(AppData *app) {
     while (!inputEnded()) {
         int menuChoice =
@@ -195,17 +201,17 @@ void payrollMenu(AppData *app) {
         if (!menuChoice) {
             return;
         }
-        if (menuChoice == 2) {
+        if (menuChoice == 2) { /* Nhập thông số lương tháng (lương, phụ cấp, thưởng, khấu trừ) */
             payrollInputForm(app);
             continue;
         }
         if (!askPeriod(&month, &year)) {
             return;
         }
-        if (menuChoice == 1 || menuChoice == 3) {
+        if (menuChoice == 1 || menuChoice == 3) { /* Xem và thao tác trên bảng lương kỳ */
             payrollView(app, month, year);
         }
-        if (menuChoice == 4) {
+        if (menuChoice == 4) { /* Xem nhanh phiếu lương của 1 nhân viên trong kỳ */
             Payroll rows[MAX_EMPLOYEES];
             size_t rowCount;
             char employeeId[16];
@@ -228,7 +234,7 @@ void payrollMenu(AppData *app) {
                 puts("Không tìm thấy phiếu lương.");
             }
         }
-        if (menuChoice == 5) {
+        if (menuChoice == 5) { /* Chốt trực tiếp tháng từ menu */
             Payroll rows[MAX_EMPLOYEES];
             size_t rowCount;
             Result result = buildPayroll(app, month, year, rows, &rowCount);
@@ -241,7 +247,7 @@ void payrollMenu(AppData *app) {
                 reportResult(app, finalizePayroll(app, month, year));
             }
         }
-        if (menuChoice == 6) {
+        if (menuChoice == 6) { /* Xuất CSV trực tiếp từ menu */
             exportPayrollForm(app, month, year);
         }
     }

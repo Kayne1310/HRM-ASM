@@ -3,9 +3,10 @@
 #include "attendance.h"
 #include "date_utils.h"
 #include "storage.h"
-#include <string.h>
-#include <limits.h>
+#include <string.h> /* Dùng cho strcmp, strcpy, memset */
+#include <limits.h> /* Dùng cho LLONG_MAX kiểm tra chống tràn số nguyên long long */
 
+/* Tìm vị trí thông số lương tháng của nhân viên id trong tháng/năm; trả về -1 nếu chưa có */
 int findInputIndex(const AppData *app, const char *id, int month, int year) {
     for (size_t index = 0; index < app->inputCount; index++) {
         if (app->inputs[index].month == month && app->inputs[index].year == year &&
@@ -16,49 +17,54 @@ int findInputIndex(const AppData *app, const char *id, int month, int year) {
     return -1;
 }
 
+/* Lưu thông số lương tháng (lương CB, phụ cấp, thưởng, khấu trừ) của nhân viên */
 Result savePayrollInput(AppData *app, const PayrollInput *input) {
     int employeeIndex = findEmployeeIndex(app, input->employeeId), inputIndex;
+    /* Kiểm tra kỳ hợp lệ, nhân viên tồn tại và có làm việc trong kỳ đó */
     if (!validMonth(input->month, input->year) || employeeIndex < 0 ||
         !employeeInMonth(employeeAt(app, employeeIndex), input->month, input->year)) {
         return appError(app, RESULT_INVALID, "Nhân viên không thuộc kỳ lương.");
     }
-    if (isLocked(app, input->month, input->year)) {
+    if (isLocked(app, input->month, input->year)) { /* Không cho sửa thông số kỳ đã chốt */
         return appError(app, RESULT_LOCKED, "Tháng đã chốt.");
     }
+    /* Kiểm tra các khoản tiền trong giới hạn cho phép */
     if (input->baseSalary <= 0 || input->baseSalary > MAX_MONEY || input->allowance < 0 ||
         input->allowance > MAX_MONEY || input->bonus < 0 || input->bonus > MAX_MONEY ||
         input->deduction < 0 || input->deduction > MAX_MONEY) {
         return appError(app, RESULT_INVALID, "Thông số tiền không hợp lệ.");
     }
     inputIndex = findInputIndex(app, input->employeeId, input->month, input->year);
-    if (inputIndex < 0) {
+    if (inputIndex < 0) { /* Nếu chưa có thông số tháng cho người này -> mở rộng mảng để thêm mới */
         if (!reserveArray((void **)&app->inputs, &app->inputCap, app->inputCount + 1,
                           sizeof(PayrollInput))) {
             return appError(app, RESULT_NO_MEMORY, "Không đủ bộ nhớ.");
         }
         inputIndex = (int)app->inputCount++;
     }
-    app->inputs[inputIndex] = *input;
+    app->inputs[inputIndex] = *input; /* Cập nhật thông số vào vị trí */
     app->dirty = 1;
     return RESULT_OK;
 }
 
+/* Tự động tạo bản sao thông số lương mặc định từ hồ sơ cho những nhân viên chưa có thông số ở tháng đó */
 Result ensurePayrollInputs(AppData *app, int month, int year) {
     if (!validMonth(month, year)) {
         return appError(app, RESULT_INVALID, "Kỳ lương không hợp lệ.");
     }
-    if (isLocked(app, month, year)) {
+    if (isLocked(app, month, year)) { /* Tháng đã chốt rồi thì không khởi tạo thêm */
         return RESULT_OK;
     }
-    /* Duyệt lần lượt các nút; không truy cập danh sách như một mảng. */
+    /* Duyệt lần lượt các nút trong danh sách liên kết nhân viên; không truy cập như mảng. */
     for (EmployeeNode *node = app->employeeHead; node != NULL; node = node->next) {
         const Employee *employee = &node->employee;
-        if (!employeeInMonth(employee, month, year)) {
+        if (!employeeInMonth(employee, month, year)) { /* Nhân viên không thuộc kỳ này -> bỏ qua */
             continue;
         }
-        if (findInputIndex(app, employee->id, month, year) >= 0) {
+        if (findInputIndex(app, employee->id, month, year) >= 0) { /* Đã có thông số rồi -> giữ nguyên */
             continue;
         }
+        /* Tạo bản sao mới lấy mức lương và phụ cấp hiện tại từ hồ sơ (thưởng, khấu trừ = 0) */
         PayrollInput input = {0};
         strcpy(input.employeeId, employee->id);
         input.month = month;
@@ -73,23 +79,25 @@ Result ensurePayrollInputs(AppData *app, int month, int year) {
     return RESULT_OK;
 }
 
-/* Chia và làm tròn bằng số nguyên: không dùng float cho tiền. */
+/* Chia hai số nguyên và làm tròn đến số nguyên gần nhất (đúng 0.5 làm tròn lên); tuyệt đối không dùng float. */
 static long long roundDiv(long long numerator, long long denominator) {
-    long long quotient = numerator / denominator;
-    long long remainder = numerator % denominator;
-    if (remainder >= (denominator + 1) / 2) {
+    long long quotient = numerator / denominator;  /* Phần thương nguyên */
+    long long remainder = numerator % denominator; /* Phần dư */
+    if (remainder >= (denominator + 1) / 2) {      /* Nếu phần dư >= một nửa mẫu số thì làm tròn lên 1 đơn vị */
         quotient++;
     }
     return quotient;
 }
 
 /*
+ * Hàm tính lương thuần túy cho 1 nhân viên (không đọc bàn phím, không ghi tệp).
  * paidUnits: tổng đơn vị nửa giờ hưởng lương; 16 đơn vị = 1 ngày công.
  * overtimeUnits: tổng đơn vị nửa giờ tăng ca; 2 đơn vị = 1 giờ.
  * Ví dụ URD: 384 đơn vị hưởng + 20 đơn vị tăng ca -> 14.437.500 đồng.
  */
 Result calculatePayroll(const PayrollInput *input, int standardDays, int paidUnits,
                         int overtimeUnits, Payroll *payroll) {
+    /* Kiểm tra tính hợp lệ của tất cả tham số đầu vào */
     if (!payroll || !input || standardDays < 1 || standardDays > 31 || paidUnits < 0 ||
         paidUnits > standardDays * 16 || overtimeUnits < 0 || overtimeUnits > standardDays * 8 ||
         input->baseSalary <= 0 || input->baseSalary > MAX_MONEY || input->allowance < 0 ||
@@ -97,12 +105,13 @@ Result calculatePayroll(const PayrollInput *input, int standardDays, int paidUni
         input->deduction < 0 || input->deduction > MAX_MONEY) {
         return RESULT_INVALID;
     }
+    /* Kiểm tra chống tràn số nguyên long long (overflow) trước khi thực hiện phép nhân */
     if (input->baseSalary > LLONG_MAX / ((long long)overtimeUnits * 3 + 1) ||
         input->baseSalary > LLONG_MAX / (paidUnits + 1LL) ||
         input->allowance > LLONG_MAX / (paidUnits + 1LL)) {
         return RESULT_INVALID;
     }
-    memset(payroll, 0, sizeof *payroll);
+    memset(payroll, 0, sizeof *payroll); /* Xóa sạch struct kết quả trước khi điền */
     strcpy(payroll->employeeId, input->employeeId);
     payroll->month = input->month;
     payroll->year = input->year;
@@ -113,25 +122,28 @@ Result calculatePayroll(const PayrollInput *input, int standardDays, int paidUni
     payroll->allowance = input->allowance;
     payroll->bonus = input->bonus;
     payroll->deduction = input->deduction;
-    /* Mẫu số 16 quy đổi ngày thành nửa giờ; 3/2 là hệ số tăng ca 150%. */
+    /* Mẫu số 16 quy đổi ngày công chuẩn thành đơn vị nửa giờ; hệ số 3/2 (3/32) là tăng ca 150%. */
     payroll->regularPay = roundDiv(input->baseSalary * paidUnits, standardDays * 16LL);
     payroll->allowancePay = roundDiv(input->allowance * paidUnits, standardDays * 16LL);
     payroll->overtimePay = roundDiv(input->baseSalary * overtimeUnits * 3, standardDays * 32LL);
+    /* Cộng tổng các khoản thu nhập trừ đi khấu trừ để ra thực lĩnh */
     payroll->netPay = payroll->regularPay + payroll->allowancePay + payroll->overtimePay +
                       payroll->bonus - payroll->deduction;
-    if (payroll->netPay < 0) {
+    if (payroll->netPay < 0) { /* Không cho phép bảng lương có thực lĩnh âm */
         return RESULT_INVALID;
     }
     return RESULT_OK;
 }
 
+/* Tổng hợp dữ liệu chấm công và thông số tháng để lập bảng lương của một kỳ */
 Result buildPayroll(AppData *app, int month, int year, Payroll rows[MAX_EMPLOYEES], size_t *count) {
-    int paidUnits[MAX_EMPLOYEES] = {0}, overtimeUnits[MAX_EMPLOYEES] = {0};
+    int paidUnits[MAX_EMPLOYEES] = {0}, overtimeUnits[MAX_EMPLOYEES] = {0}; /* Mảng tích lũy đơn vị giờ theo chỉ số nhân viên */
     Result result;
     *count = 0;
     if (!validMonth(month, year)) {
         return appError(app, RESULT_INVALID, "Kỳ lương không hợp lệ.");
     }
+    /* Nếu tháng đã chốt -> đọc nguyên bản ghi đã lưu cố định từ mảng payrolls, không tính lại */
     if (isLocked(app, month, year)) {
         for (size_t index = 0; index < app->payrollCount; index++) {
             if (app->payrolls[index].month == month && app->payrolls[index].year == year) {
@@ -140,13 +152,16 @@ Result buildPayroll(AppData *app, int month, int year, Payroll rows[MAX_EMPLOYEE
         }
         return RESULT_OK;
     }
+    /* Nếu chưa chốt -> bắt buộc kiểm tra không còn thiếu ngày chấm công nào */
     if (missingAttendance(app, month, year, NULL, NULL)) {
         return appError(app, RESULT_INVALID, "Còn thiếu chấm công; xem chức năng kiểm tra thiếu.");
     }
+    /* Đảm bảo mọi nhân viên thuộc kỳ đều đã có thông số lương tháng */
     result = ensurePayrollInputs(app, month, year);
     if (result != RESULT_OK) {
         return result;
     }
+    /* Cộng dồn tổng số nửa giờ hưởng lương (Q) và nửa giờ tăng ca (T) từ mảng attendance */
     for (size_t index = 0; index < app->attendanceCount; index++) {
         Attendance *payroll = &app->attendance[index];
         if (payroll->date.month != month || payroll->date.year != year) {
@@ -156,9 +171,11 @@ Result buildPayroll(AppData *app, int month, int year, Payroll rows[MAX_EMPLOYEE
         if (employee < 0) {
             return appError(app, RESULT_INVALID, "Công tham chiếu mã không tồn tại.");
         }
+        /* Nghỉ có lương (ATT_PAID_LEAVE) được cộng tròn 16 đơn vị (= 1 ngày công 8 giờ) */
         paidUnits[employee] += payroll->type == ATT_PAID_LEAVE ? 16 : payroll->regularHalfHours;
         overtimeUnits[employee] += payroll->overtimeHalfHours;
     }
+    /* Gọi calculatePayroll tính lương cho từng nhân viên có làm việc trong tháng */
     for (size_t index = 0; index < app->employeeCount; index++) {
         if (employeeInMonth(employeeAt(app, index), month, year)) {
             Employee *employee = employeeAt(app, index);
@@ -170,6 +187,7 @@ Result buildPayroll(AppData *app, int month, int year, Payroll rows[MAX_EMPLOYEE
                                 "Lương %s không hợp lệ hoặc thực lĩnh âm; sửa thông số tháng.",
                                 employee->id);
             }
+            /* Lưu kèm tên và phòng ban hiện tại vào kết quả bảng lương */
             strcpy(rows[*count].employeeName, employee->fullName);
             strcpy(rows[*count].department, employee->department);
             (*count)++;
@@ -178,33 +196,35 @@ Result buildPayroll(AppData *app, int month, int year, Payroll rows[MAX_EMPLOYEE
     return RESULT_OK;
 }
 
+/* Chốt bảng lương chính thức cho một tháng (tạo file snapshot payroll_YYYY_MM.txt và khóa tháng) */
 Result finalizePayroll(AppData *app, int month, int year) {
     Payroll rows[MAX_EMPLOYEES];
     size_t rowCount;
     Result result;
-    if (isLocked(app, month, year)) {
+    if (isLocked(app, month, year)) { /* Chặn chốt lặp lại 1 tháng đã khóa */
         return appError(app, RESULT_LOCKED, "Tháng đã chốt, không ghi đè.");
     }
-    result = buildPayroll(app, month, year, rows, &rowCount);
+    result = buildPayroll(app, month, year, rows, &rowCount); /* Tổng hợp và tính lại bảng lương mới nhất */
     if (result != RESULT_OK) {
         return result;
     }
-    /* Cấp sẵn bộ nhớ trước khi ghi tệp để không chốt trên đĩa rồi thiếu bộ nhớ. */
+    /* Cấp sẵn bộ nhớ trước khi ghi tệp để không xảy ra tình trạng ghi đĩa rồi thiếu RAM thêm khóa. */
     if (!reserveArray((void **)&app->payrolls, &app->payrollCap, app->payrollCount + rowCount,
                       sizeof(Payroll)) ||
         !reserveArray((void **)&app->locks, &app->lockCap, app->lockCount + 1, sizeof(MonthLock))) {
         return appError(app, RESULT_NO_MEMORY, "Không đủ bộ nhớ để chốt.");
     }
-    /* Bước 1: lưu nguồn công và thông số; nếu lỗi thì chưa chốt. */
+    /* Bước 1: lưu tệp dữ liệu nguồn (công và thông số) trước; nếu lỗi thì dừng, chưa chốt. */
     result = saveData(app);
     if (result != RESULT_OK) {
         return result;
     }
-    /* Bước 2: công bố tệp chính thức; chỉ sau thành công mới thêm khóa kỳ. */
+    /* Bước 2: ghi tệp snapshot chính thức qua tệp tạm; chỉ sau thành công mới khóa tháng trong RAM. */
     result = writePayrollSnapshot(app, month, year, rows, rowCount);
     if (result != RESULT_OK) {
         return result;
     }
+    /* Chép các dòng lương đã chốt vào bộ nhớ lưu trữ và đánh dấu tháng đã khóa */
     for (size_t index = 0; index < rowCount; index++) {
         app->payrolls[app->payrollCount++] = rows[index];
     }
