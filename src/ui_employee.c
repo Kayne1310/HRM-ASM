@@ -117,8 +117,14 @@ static void showEmployeeDetails(const AppData *app) {
 
 void employeeMenu(AppData *app) {
     const char *menu = "\nNHÂN VIÊN\n"
-                       "1 Thêm | 2 Danh sách và lọc | 3 Sửa | 4 Nghỉ việc\n"
-                       "5 Xóa | 6 Chi tiết | 7 Sắp xếp theo mã bằng Merge Sort | 0 Quay lại";
+                       " 1. Thêm nhân viên\n"
+                       " 2. Danh sách và lọc\n"
+                       " 3. Sửa hồ sơ\n"
+                       " 4. Ghi nhận nghỉ việc\n"
+                       " 5. Xóa hồ sơ\n"
+                       " 6. Xem chi tiết\n"
+                       " 7. Sắp xếp theo mã\n"
+                       " 0. Quay lại";
     while (!inputEnded()) {
         int menuChoice = askMenuChoice(menu, 7);
         switch (menuChoice) {

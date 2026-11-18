@@ -106,7 +106,7 @@ Tất cả yêu cầu dưới đây thuộc mức bắt buộc của phiên bả
 | --- | --- | --- |
 | FR01 | Quản lý hồ sơ | Thêm, xem, sửa hồ sơ; mã duy nhất; không xóa nhân viên có phát sinh. |
 | FR02 | Ghi nhận nghỉ việc | Lưu ngày làm cuối cùng; bảo toàn lịch sử và kiểm tra các bản ghi hiện có. |
-| FR03 | Chấm công | Thêm, sửa, xóa và xem theo ngày hoặc nhân viên; chống trùng nhân viên và ngày. |
+| FR03 | Chấm công | Tạo nhanh theo tháng, nhập từng ngày nghỉ, sửa, xóa và xem theo ngày hoặc nhân viên; bỏ qua Chủ nhật và chống trùng nhân viên, ngày. |
 | FR04 | Kiểm tra đầy đủ công | Liệt kê từng nhân viên và ngày thiếu; thiếu dữ liệu không tự coi là nghỉ không lương. |
 | FR05 | Thông số lương tháng | Khởi tạo bản sao lương và phụ cấp; nhập thưởng, khấu trừ; cập nhật có chủ đích. |
 | FR06 | Tính lương tạm | Tổng hợp công và tăng ca; áp dụng công thức; chỉ ra dữ liệu không hợp lệ. |

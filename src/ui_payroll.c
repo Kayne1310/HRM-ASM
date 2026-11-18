@@ -40,7 +40,11 @@ static void payrollInputForm(AppData *app) {
            payrollInput.baseSalary, payrollInput.allowance, payrollInput.bonus,
            payrollInput.deduction);
     int menuChoice =
-        askMenuChoice("1 Nhập toàn bộ thông số | 2 Lấy lại lương phụ cấp từ hồ sơ | 0 Hủy", 2);
+        askMenuChoice("\nTHÔNG SỐ LƯƠNG\n"
+                      " 1. Nhập lương, phụ cấp, thưởng và khấu trừ\n"
+                      " 2. Lấy lương và phụ cấp từ hồ sơ\n"
+                      " 0. Hủy",
+                      2);
     if (!menuChoice) {
         return;
     }
@@ -130,8 +134,14 @@ static void payrollView(AppData *app, int month, int year) {
         qsort(rows, rowCount, sizeof(Payroll), comparePayrollById);
         printf("\nKỳ %02d/%d\n", month, year);
         printPayroll(rows, rowCount, isLocked(app, month, year), 1);
-        int menuChoice = askMenuChoice(
-            "1 Phiếu lương | 2 Chốt | 3 Xuất | 4 Sắp tăng | 5 Sắp giảm | 0 Quay lại", 5);
+        int menuChoice = askMenuChoice("\nTHAO TÁC BẢNG LƯƠNG\n"
+                                       " 1. Xem phiếu lương\n"
+                                       " 2. Chốt kỳ lương\n"
+                                       " 3. Xuất CSV\n"
+                                       " 4. Sắp xếp thực lĩnh tăng dần\n"
+                                       " 5. Sắp xếp thực lĩnh giảm dần\n"
+                                       " 0. Quay lại",
+                                       5);
         if (!menuChoice) {
             return;
         }
@@ -172,8 +182,14 @@ static void payrollView(AppData *app, int month, int year) {
 void payrollMenu(AppData *app) {
     while (!inputEnded()) {
         int menuChoice =
-            askMenuChoice("\nBẢNG LƯƠNG\n1 Lập tính lại và xem | 2 Thông số thưởng khấu trừ\n3 Xem "
-                          "theo tháng | 4 Phiếu lương | 5 Chốt tháng | 6 Xuất CSV | 0 Quay lại",
+            askMenuChoice("\nBẢNG LƯƠNG\n"
+                          " 1. Lập lại và xem bảng lương\n"
+                          " 2. Cập nhật thông số lương\n"
+                          " 3. Xem bảng lương theo tháng\n"
+                          " 4. Xem phiếu lương theo mã nhân viên\n"
+                          " 5. Chốt tháng\n"
+                          " 6. Xuất CSV\n"
+                          " 0. Quay lại",
                           6);
         int month, year;
         if (!menuChoice) {

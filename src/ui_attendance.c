@@ -52,19 +52,84 @@ static void attendanceForm(AppData *app, const char *givenEmployeeId, Date date,
     }
 }
 
+static void quickAttendanceForm(AppData *app) {
+    char employeeId[16];
+    int month, year;
+    long long leaveCountInput;
+    int leaveDays[31];
+    size_t createdCount = 0;
+
+    if (!askPeriod(&month, &year) || !askEmployeeId(employeeId)) {
+        return;
+    }
+    if (isLocked(app, month, year)) {
+        puts("Tháng đã chốt, chỉ xem.");
+        return;
+    }
+    if (!askInteger("Số ngày nghỉ trong tháng (0 nếu không có): ", 0, 31, &leaveCountInput)) {
+        return;
+    }
+    size_t leaveCount = (size_t)leaveCountInput;
+    for (size_t index = 0; index < leaveCount; index++) {
+        Date leaveDate;
+        printf("Ngày nghỉ %zu/%zu\n", index + 1, leaveCount);
+        if (!askDate("Ngày nghỉ: ", &leaveDate)) {
+            return;
+        }
+        if (leaveDate.month != month || leaveDate.year != year) {
+            puts("Ngày nghỉ phải nằm trong tháng đã chọn.");
+            return;
+        }
+        leaveDays[index] = leaveDate.day;
+    }
+
+    AttendanceType leaveType = ATT_UNPAID_LEAVE;
+    if (leaveCount) {
+        long long selectedType;
+        if (!askInteger("Loại nghỉ 1 có lương, 2 không lương: ", 1, 2, &selectedType)) {
+            return;
+        }
+        leaveType = selectedType == 1 ? ATT_PAID_LEAVE : ATT_UNPAID_LEAVE;
+    }
+    printf("Tạo công thứ Hai đến thứ Bảy, bỏ Chủ nhật, cho %s, kỳ %02d/%d. ",
+           employeeId, month, year);
+    if (!confirm("Ngày nghỉ đã nhập sẽ dùng loại đã chọn. Y tiếp tục, N hủy: ")) {
+        return;
+    }
+
+    Result result = generateMonthlyAttendance(app, employeeId, month, year, leaveDays,
+                                             leaveCount, leaveType, &createdCount);
+    if (result == RESULT_OK) {
+        printf("Đã tạo %zu bản ghi. Hãy lưu dữ liệu trước khi thoát.\n", createdCount);
+    } else {
+        reportResult(app, result);
+    }
+}
+
 void attendanceMenu(AppData *app) {
     while (!inputEnded()) {
         int menuChoice =
-            askMenuChoice("\nCHẤM CÔNG\n1 Một người | 2 Lần lượt theo ngày | 3 Xem theo ngày\n4 "
-                          "Xem theo người tháng | 5 Sửa | 6 Xóa | 7 Kiểm tra thiếu | 0 Quay lại",
-                          7);
+            askMenuChoice("\nCHẤM CÔNG\n"
+                          " 1. Tạo công nhanh cả tháng cho một nhân viên\n"
+                          " 2. Chấm công một ngày cho một người\n"
+                          " 3. Chấm lần lượt theo ngày\n"
+                          " 4. Xem công theo ngày\n"
+                          " 5. Xem công theo người và tháng\n"
+                          " 6. Sửa bản ghi công\n"
+                          " 7. Xóa bản ghi công\n"
+                          " 8. Kiểm tra ngày công còn thiếu\n"
+                          " 0. Quay lại",
+                          8);
         if (!menuChoice) {
             return;
         }
-        if (menuChoice == 1 || menuChoice == 5) {
-            attendanceForm(app, NULL, (Date){0}, menuChoice == 5);
+        if (menuChoice == 1) {
+            quickAttendanceForm(app);
         }
-        if (menuChoice == 2) {
+        if (menuChoice == 2 || menuChoice == 6) {
+            attendanceForm(app, NULL, (Date){0}, menuChoice == 6);
+        }
+        if (menuChoice == 3) {
             Date selectedDate;
             if (!askDate("Ngày chấm: ", &selectedDate)) {
                 return;
@@ -83,14 +148,14 @@ void attendanceMenu(AppData *app) {
                 }
             }
         }
-        if (menuChoice == 3) {
+        if (menuChoice == 4) {
             Date selectedDate;
             if (!askDate("Ngày xem: ", &selectedDate)) {
                 return;
             }
             printAttendance(app, NULL, 0, 0, &selectedDate, 1);
         }
-        if (menuChoice == 4 || menuChoice == 7) {
+        if (menuChoice == 5 || menuChoice == 8) {
             char employeeId[16];
             int month, year;
             if (!askPeriod(&month, &year) ||
@@ -102,7 +167,7 @@ void attendanceMenu(AppData *app) {
                 puts("Không tìm thấy nhân viên.");
                 continue;
             }
-            if (menuChoice == 4) {
+            if (menuChoice == 5) {
                 printAttendance(app, employeeId, month, year, NULL, 1);
             } else {
                 int missingCount = missingAttendance(app, month, year, employeeId, stdout);
@@ -112,7 +177,7 @@ void attendanceMenu(AppData *app) {
                 }
             }
         }
-        if (menuChoice == 6) {
+        if (menuChoice == 7) {
             char employeeId[16];
             Date selectedDate;
             if (!askEmployeeId(employeeId) || !askDate("Ngày xóa: ", &selectedDate)) {
